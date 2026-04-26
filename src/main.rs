@@ -380,8 +380,7 @@ impl Backend {
         uri: &str,
         diagnostics: Vec<Diagnostic>,
     ) -> Result<(), Box<dyn Error + Sync + Send>> {
-        let url = Self::parse_uri(uri)
-            .ok_or_else(|| format!("invalid URI: {uri}"))?;
+        let url = Self::parse_uri(uri).ok_or_else(|| format!("invalid URI: {uri}"))?;
         let params = PublishDiagnosticsParams {
             uri: url,
             diagnostics,
@@ -391,9 +390,7 @@ impl Backend {
             method: "textDocument/publishDiagnostics".to_string(),
             params: serde_json::to_value(&params)?,
         };
-        connection
-            .sender
-            .send(Message::Notification(not))?;
+        connection.sender.send(Message::Notification(not))?;
         Ok(())
     }
 
@@ -401,9 +398,7 @@ impl Backend {
 
     fn run(&mut self, connection: Connection) -> Result<(), Box<dyn Error + Sync + Send>> {
         let server_capabilities = ServerCapabilities {
-            text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                TextDocumentSyncKind::FULL,
-            )),
+            text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
             completion_provider: Some(CompletionOptions {
                 trigger_characters: Some(vec![".".to_string()]),
                 ..Default::default()
@@ -457,7 +452,11 @@ impl Backend {
             }
             "textDocument/hover" => {
                 let params: HoverParams = serde_json::from_value(req.params)?;
-                let uri = params.text_document_position_params.text_document.uri.to_string();
+                let uri = params
+                    .text_document_position_params
+                    .text_document
+                    .uri
+                    .to_string();
                 let pos = params.text_document_position_params.position;
                 let result = self.get_hover(&uri, pos);
                 let resp = Response {
@@ -469,7 +468,11 @@ impl Backend {
             }
             "textDocument/definition" => {
                 let params: GotoDefinitionParams = serde_json::from_value(req.params)?;
-                let uri = params.text_document_position_params.text_document.uri.to_string();
+                let uri = params
+                    .text_document_position_params
+                    .text_document
+                    .uri
+                    .to_string();
                 let pos = params.text_document_position_params.position;
                 let result = self.get_definition(&uri, pos);
                 let resp = Response {
