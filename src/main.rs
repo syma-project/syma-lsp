@@ -246,7 +246,15 @@ impl Backend {
 
     // ── Completions ──
 
-    fn get_completions(&self, _uri: &str, _pos: Position) -> Vec<CompletionItem> {
+    fn get_completions(&self, uri: &str, pos: Position) -> Vec<CompletionItem> {
+        // Extract prefix at cursor position
+        let prefix = self
+            .documents
+            .get(uri)
+            .map(|text| Self::word_prefix_at_position(text, pos))
+            .unwrap_or_default();
+        let prefix_lower = prefix.to_lowercase();
+
         let mut items: Vec<CompletionItem> = Vec::new();
         let mut seen = std::collections::HashSet::new();
 
@@ -254,41 +262,68 @@ impl Backend {
         let env = self.kernel.env();
         let bindings = env.all_bindings();
         for (name, _val) in &bindings {
-            if seen.insert(name.clone()) {
-                let kind = if name.starts_with(|c: char| c.is_uppercase()) {
-                    CompletionItemKind::FUNCTION
-                } else {
-                    CompletionItemKind::VARIABLE
-                };
-                items.push(CompletionItem {
-                    label: name.clone(),
-                    kind: Some(kind),
-                    detail: Some("Syma builtin".to_string()),
-                    insert_text: Some(name.clone()),
-                    ..Default::default()
-                });
+            if !seen.insert(name.clone()) {
+                continue;
             }
+            // Filter by prefix when one is typed
+            if !prefix_lower.is_empty()
+                && !name.to_lowercase().starts_with(&prefix_lower)
+            {
+                continue;
+            }
+            let kind = if name.starts_with(|c: char| c.is_uppercase()) {
+                CompletionItemKind::FUNCTION
+            } else {
+                CompletionItemKind::VARIABLE
+            };
+            items.push(CompletionItem {
+                label: name.clone(),
+                kind: Some(kind),
+                detail: Some("Syma builtin".to_string()),
+                insert_text: Some(name.clone()),
+                ..Default::default()
+            });
         }
 
         // User-defined symbols from document scanning
         for def in &self.symbol_defs {
-            if seen.insert(def.name.clone()) {
-                items.push(CompletionItem {
-                    label: def.name.clone(),
-                    kind: Some(match def.kind {
-                        SymbolKind::FUNCTION => CompletionItemKind::FUNCTION,
-                        SymbolKind::CLASS => CompletionItemKind::CLASS,
-                        SymbolKind::MODULE => CompletionItemKind::MODULE,
-                        _ => CompletionItemKind::VARIABLE,
-                    }),
-                    detail: Some(def.detail.clone()),
-                    insert_text: Some(def.name.clone()),
-                    ..Default::default()
-                });
+            if !seen.insert(def.name.clone()) {
+                continue;
             }
+            if !prefix_lower.is_empty()
+                && !def.name.to_lowercase().starts_with(&prefix_lower)
+            {
+                continue;
+            }
+            items.push(CompletionItem {
+                label: def.name.clone(),
+                kind: Some(match def.kind {
+                    SymbolKind::FUNCTION => CompletionItemKind::FUNCTION,
+                    SymbolKind::CLASS => CompletionItemKind::CLASS,
+                    SymbolKind::MODULE => CompletionItemKind::MODULE,
+                    _ => CompletionItemKind::VARIABLE,
+                }),
+                detail: Some(def.detail.clone()),
+                insert_text: Some(def.name.clone()),
+                ..Default::default()
+            });
         }
 
         items
+    }
+
+    /// Extract the word prefix at cursor position for completion filtering.
+    fn word_prefix_at_position(text: &str, pos: Position) -> String {
+        let line = pos.line as usize;
+        let col = pos.character as usize;
+        let line_str = text.lines().nth(line).unwrap_or("");
+        let col = col.min(line_str.len());
+        let before = &line_str[..col];
+        let start = before
+            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        before[start..].to_string()
     }
 
     // ── Hover ──
@@ -527,7 +562,9 @@ impl Backend {
             }
             "textDocument/didClose" => {
                 let params: DidCloseTextDocumentParams = serde_json::from_value(not.params)?;
-                self.close_document(params.text_document.uri.as_ref());
+                let uri = params.text_document.uri.to_string();
+                self.close_document(&uri);
+                self.publish_diagnostics(connection, &uri, vec![])?;
             }
             "textDocument/didSave" => {
                 // Diagnostics are already published on change
