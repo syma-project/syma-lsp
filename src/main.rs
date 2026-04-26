@@ -524,7 +524,7 @@ impl Backend {
             }
             "textDocument/didClose" => {
                 let params: DidCloseTextDocumentParams = serde_json::from_value(not.params)?;
-                self.close_document(&params.text_document.uri.to_string());
+                self.close_document(params.text_document.uri.as_ref());
             }
             "textDocument/didSave" => {
                 // Diagnostics are already published on change
