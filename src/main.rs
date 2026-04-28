@@ -1433,7 +1433,7 @@ struct SemanticTokenRaw {
 /// Get the display length of a token (in characters) for semantic token ranges.
 fn token_display_length(token: &Token) -> usize {
     match token {
-        Token::Ident(s) | Token::Integer(s) | Token::Real(s) | Token::Str(s) | Token::Operator(s) => s.len(),
+        Token::Ident(s) | Token::Integer(s) | Token::Real(s) | Token::Complex(s) | Token::Str(s) | Token::Operator(s) => s.len(),
         Token::SlotN(n) => format!("#{}", n).len(),
         Token::SlotSequenceN(n) => format!("##{}", n).len(),
         Token::LBrace | Token::RBrace | Token::LBracket | Token::RBracket
