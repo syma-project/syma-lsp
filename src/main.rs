@@ -221,8 +221,7 @@ impl Backend {
 
     /// Find the byte offset of a Position in the text.
     fn position_to_byte_offset(text: &str, pos: Position) -> Option<usize> {
-        let mut line_idx: usize = 0;
-        for line in text.lines() {
+        for (line_idx, line) in text.lines().enumerate() {
             if line_idx == pos.line as usize {
                 let char_idx = pos.character as usize;
                 let mut byte_offset = 0;
@@ -235,7 +234,6 @@ impl Backend {
                 }
                 return Some(byte_offset);
             }
-            line_idx += 1;
         }
         None
     }
@@ -516,7 +514,7 @@ impl Backend {
                 version: None,
             };
             let oneof_edits: Vec<OneOf<TextEdit, AnnotatedTextEdit>> =
-                edits.into_iter().map(|e| OneOf::Left(e)).collect();
+                edits.into_iter().map(OneOf::Left).collect();
             text_document_edits.push(TextDocumentEdit {
                 text_document: versioned,
                 edits: oneof_edits,
@@ -546,7 +544,7 @@ impl Backend {
             version: None,
         };
         let oneof_edits: Vec<OneOf<TextEdit, AnnotatedTextEdit>> =
-            edits.into_iter().map(|e| OneOf::Left(e)).collect();
+            edits.into_iter().map(OneOf::Left).collect();
         Some(WorkspaceEdit {
             document_changes: Some(DocumentChanges::Edits(vec![TextDocumentEdit {
                 text_document: versioned,
@@ -598,13 +596,13 @@ impl Backend {
         for (doc_uri, doc_text) in &self.documents {
             let edits = compute_rename_edits(doc_text, &token, &token);
             for edit in &edits {
-                if edit.range.start != current_pos || *doc_uri != uri {
-                    if let Some(url) = parse_uri(doc_uri) {
-                        locations.push(Location {
-                            uri: url,
-                            range: edit.range,
-                        });
-                    }
+                if (edit.range.start != current_pos || *doc_uri != uri)
+                    && let Some(url) = parse_uri(doc_uri)
+                {
+                    locations.push(Location {
+                        uri: url,
+                        range: edit.range,
+                    });
                 }
             }
         }
@@ -1193,7 +1191,7 @@ fn walk_expr_for_symbols(
             let span = find_token_span(tokens, &Token::Ident(name.clone()));
             let range = span.map(|s| span_to_range_with_length(&s, name.len())).unwrap_or_default();
 
-            let param_names: Vec<String> = params.iter().map(|p| extract_param_name(p)).collect();
+            let param_names: Vec<String> = params.iter().map(extract_param_name).collect();
             let signature = if !param_names.is_empty() {
                 Some(param_names.join(", "))
             } else {
@@ -1376,9 +1374,8 @@ fn compute_rename_edits(text: &str, old_name: &str, new_name: &str) -> Vec<TextE
 fn char_index_to_line_offset(text: &str, char_idx: usize) -> Position {
     let mut line = 0u32;
     let mut char_in_line = 0u32;
-    let mut chars_consumed = 0;
 
-    for c in text.chars() {
+    for (chars_consumed, c) in text.chars().enumerate() {
         if chars_consumed >= char_idx {
             break;
         }
@@ -1388,7 +1385,6 @@ fn char_index_to_line_offset(text: &str, char_idx: usize) -> Position {
         } else {
             char_in_line += 1;
         }
-        chars_consumed += 1;
     }
 
     Position {
